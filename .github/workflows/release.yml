@@ -2,14 +2,22 @@ name: Release
 on:
   push:
     tags: ['[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing plain version tag to release
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
   tests:
     uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
   build:
     needs: tests
     runs-on: ubuntu-latest
@@ -19,8 +27,13 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - name: Require a commit on main
-        run: git merge-base --is-ancestor HEAD origin/main
+          ref: ${{ inputs.tag || github.ref_name }}
+      - name: Require the exact tag on main
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          git merge-base --is-ancestor HEAD origin/main
       - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.12'
@@ -30,7 +43,7 @@ jobs:
       - name: Validate tag and distributions
         id: validate
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: python scripts/validate_release.py
       - name: Smoke test built wheel
         run: |
@@ -57,7 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           PRERELEASE: ${{ needs.build.outputs.prerelease }}
         run: |
           args=(--verify-tag --generate-notes --title "$RELEASE_TAG")
