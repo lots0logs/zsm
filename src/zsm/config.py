@@ -5,7 +5,7 @@ from pathlib import Path
 
 import marshmallow
 import yaml
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate, validates_schema
 
 from . import zfs
 
@@ -82,6 +82,18 @@ class SnapshotSchema(Schema):
     label = LabelField(required=True)
     frequency = FrequencyField(required=True)
     retention = fields.Integer(required=True)
+    schedule = fields.String(
+        load_default="elapsed", validate=validate.OneOf(["elapsed", "clock"])
+    )
+
+    @validates_schema
+    def validate_clock_frequency(self, data, **kwargs):
+        if data.get("schedule") == "clock" and data.get(
+            "frequency", datetime.timedelta(0)
+        ) <= datetime.timedelta(0):
+            raise marshmallow.ValidationError(
+                "Clock schedule frequency must be positive", field_name="frequency"
+            )
 
 
 class ConfigSchema(Schema):

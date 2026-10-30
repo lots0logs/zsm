@@ -29,8 +29,10 @@ def get_snapshots(dataset: zfs.Dataset, label: str) -> Iterable[zfs.Snapshot]:
     return result
 
 
-def create_snapshot(dataset: zfs.Dataset, label: str) -> None:
-    timestamp = datetime.datetime.now().strftime(SNAPSHOT_TIMESTAMP_FORMAT)
+def create_snapshot(
+    dataset: zfs.Dataset, label: str, now: datetime.datetime = None
+) -> None:
+    timestamp = (now or datetime.datetime.now()).strftime(SNAPSHOT_TIMESTAMP_FORMAT)
     zfs.create_snapshot(
         dataset=dataset,
         name=SNAPSHOT_DELIMITER.join([SNAPSHOT_PREFIX, label, timestamp]),
@@ -51,6 +53,7 @@ def manage_snapshots(config: Dict, now: datetime.datetime, dry_run: bool) -> Non
             label=snapshot_config["label"],
             frequency=snapshot_config["frequency"],
             dry_run=dry_run,
+            schedule=snapshot_config.get("schedule", "elapsed"),
         )
 
     for snapshot_config in config["snapshots"]:
@@ -70,21 +73,39 @@ def create_snapshots(
     label: str,
     frequency: datetime.timedelta,
     dry_run: bool,
+    schedule: str = "elapsed",
 ) -> None:
+    if schedule == "clock" and frequency <= datetime.timedelta(0):
+        raise ValueError("Clock schedule frequency must be positive")
+
+    def create():
+        if schedule == "clock":
+            create_snapshot(dataset=dataset, label=label, now=now)
+        else:
+            create_snapshot(dataset=dataset, label=label)
+
     snapshots = get_snapshots(dataset=dataset, label=label)
 
     if len(snapshots) == 0:
         log.info(f"[{dataset.name}:{label}] No snapshots yet, creating the first one.")
 
         if not dry_run:
-            create_snapshot(dataset=dataset, label=label)
+            create()
 
     else:
         latest_snapshot = snapshots[0]
         _, latest_timestamp = parse_snapshot(snapshot=latest_snapshot)
         latest_age = now - latest_timestamp
 
-        if latest_age > frequency:
+        if schedule == "clock":
+            # Local wall-clock buckets, anchored on a Sunday at midnight.
+            # Compare slots rather than elapsed seconds to tolerate cron jitter.
+            anchor = datetime.datetime(1970, 1, 4)
+            due = (now - anchor) // frequency > (latest_timestamp - anchor) // frequency
+        else:
+            due = latest_age >= frequency
+
+        if due:
             log.info(
                 f"[{dataset.name}:{label}] "
                 f"Latest snapshot ({latest_snapshot.name}) is {latest_age} old, "
@@ -92,7 +113,7 @@ def create_snapshots(
             )
 
             if not dry_run:
-                create_snapshot(dataset=dataset, label=label)
+                create()
 
         else:
             log.info(

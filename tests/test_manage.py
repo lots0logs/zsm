@@ -2,6 +2,7 @@ import datetime
 from unittest import mock
 
 import freezegun
+import pytest
 
 import zsm.manage
 import zsm.zfs
@@ -130,3 +131,123 @@ def test_manage_snapshots_calls_zfs_create_and_destroy(
         ),
     ]
     assert mocked_zfs_get_snapshots.called
+
+
+@mock.patch("zsm.manage.create_snapshot")
+@mock.patch("zsm.manage.get_snapshots")
+def test_elapsed_creates_at_exact_frequency(get_snapshots, create):
+    get_snapshots.return_value = [
+        zsm.zfs.Snapshot(dataset, "zsm_hourly_2026-10-30T12:00:02")
+    ]
+    zsm.manage.create_snapshots(
+        datetime.datetime(2026, 10, 30, 13, 0, 2),
+        dataset,
+        "hourly",
+        datetime.timedelta(hours=1),
+        False,
+    )
+    create.assert_called_once_with(dataset=dataset, label="hourly")
+
+
+@mock.patch("zsm.zfs.create_snapshot")
+@mock.patch("zsm.manage.get_snapshots")
+def test_clock_creates_despite_negative_second_jitter(get_snapshots, create):
+    get_snapshots.return_value = [
+        zsm.zfs.Snapshot(dataset, "zsm_frequent_2026-10-30T12:00:02")
+    ]
+    now = datetime.datetime(2026, 10, 30, 12, 15, 1)
+    zsm.manage.create_snapshots(
+        now,
+        dataset,
+        "frequent",
+        datetime.timedelta(minutes=15),
+        False,
+        schedule="clock",
+    )
+    create.assert_called_once_with(
+        dataset=dataset, name="zsm_frequent_2026-10-30T12:15:01"
+    )
+
+
+@mock.patch("zsm.manage.create_snapshot")
+@mock.patch("zsm.manage.get_snapshots")
+def test_clock_skips_repeated_run_in_same_slot(get_snapshots, create):
+    get_snapshots.return_value = [
+        zsm.zfs.Snapshot(dataset, "zsm_hourly_2026-10-30T12:00:02")
+    ]
+    zsm.manage.create_snapshots(
+        datetime.datetime(2026, 10, 30, 12, 59, 59),
+        dataset,
+        "hourly",
+        datetime.timedelta(hours=1),
+        False,
+        schedule="clock",
+    )
+    create.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "latest, now, frequency, expected",
+    [
+        ("2026-10-30T12:00:02", "2026-10-30T13:00:01", 3600, True),
+        ("2026-10-30T23:59:59", "2026-10-31T00:00:01", 86400, True),
+        ("2026-10-31T23:59:59", "2026-11-01T00:00:01", 604800, True),
+        ("2026-10-27T12:00:00", "2026-10-30T13:00:00", 900, True),
+        ("2026-10-30T13:00:00", "2026-10-30T12:00:00", 900, False),
+        ("2026-10-30T12:15:01", "2026-10-30T12:16:00", 900, False),
+    ],
+)
+def test_clock_boundaries_and_downtime(latest, now, frequency, expected):
+    snapshots = [zsm.zfs.Snapshot(dataset, "zsm_test_" + latest)]
+    with mock.patch("zsm.manage.get_snapshots", return_value=snapshots), mock.patch(
+        "zsm.manage.create_snapshot"
+    ) as create:
+        zsm.manage.create_snapshots(
+            datetime.datetime.strptime(now, zsm.manage.SNAPSHOT_TIMESTAMP_FORMAT),
+            dataset,
+            "test",
+            datetime.timedelta(seconds=frequency),
+            False,
+            schedule="clock",
+        )
+    assert create.call_count == int(expected)
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_clock_first_snapshot_and_dry_run(dry_run):
+    now = datetime.datetime(2026, 10, 30, 12, 15, 1)
+    with mock.patch("zsm.manage.get_snapshots", return_value=[]), mock.patch(
+        "zsm.manage.create_snapshot"
+    ) as create:
+        zsm.manage.create_snapshots(
+            now,
+            dataset,
+            "test",
+            datetime.timedelta(minutes=15),
+            dry_run,
+            schedule="clock",
+        )
+    if dry_run:
+        create.assert_not_called()
+    else:
+        create.assert_called_once_with(dataset=dataset, label="test", now=now)
+
+
+def test_manage_passes_clock_schedule():
+    config = {
+        "snapshots": [
+            {
+                "dataset": dataset,
+                "label": "test",
+                "frequency": datetime.timedelta(hours=1),
+                "retention": 12,
+                "schedule": "clock",
+            }
+        ]
+    }
+    now = datetime.datetime(2026, 10, 30, 13)
+    with mock.patch("zsm.manage.create_snapshots") as create, mock.patch(
+        "zsm.manage.destroy_snapshots"
+    ):
+        zsm.manage.manage_snapshots(config, now, True)
+    assert create.call_args[1]["schedule"] == "clock"

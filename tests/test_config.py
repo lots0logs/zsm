@@ -89,3 +89,23 @@ def test_load_raises_validationerror_for_invalid_datas():
     for data in datas:
         with pytest.raises(zsm.config.ValidationError):
             zsm.config.load(data=textwrap.dedent(data))
+
+
+@pytest.mark.parametrize("schedule", ["clock", "elapsed"])
+@mock.patch("zsm.zfs.get_datasets", mock.MagicMock(return_value=datasets))
+def test_schedule_modes(schedule):
+    data = zsm.config.load(
+        "snapshots:\n- dataset: tank/a\n  label: hourly\n"
+        "  frequency: 1h\n  retention: 12\n  schedule: " + schedule
+    )
+    assert data["snapshots"][0]["schedule"] == schedule
+
+
+@pytest.mark.parametrize("schedule, frequency", [("invalid", "1h"), ("clock", "0s")])
+@mock.patch("zsm.zfs.get_datasets", mock.MagicMock(return_value=datasets))
+def test_invalid_clock_config(schedule, frequency):
+    with pytest.raises(zsm.config.ValidationError):
+        zsm.config.load(
+            "snapshots:\n- dataset: tank/a\n  label: hourly\n"
+            "  retention: 12\n  schedule: " + schedule + "\n  frequency: " + frequency
+        )
