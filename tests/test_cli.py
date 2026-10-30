@@ -1,7 +1,7 @@
+from importlib.metadata import version as distribution_version
 from unittest import mock
 
 import pid
-import pkg_resources
 from click.testing import CliRunner
 
 import zsm
@@ -84,7 +84,7 @@ def test_version_prints_version():
 
     assert result.exit_code == 0
 
-    version = pkg_resources.get_distribution("zsm").version
+    version = distribution_version("zsm")
     assert result.output.strip() == f"zsm {version}"
 
 

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.pytest.ini_options]
 addopts = '''
     --cache-clear
@@ -14,7 +18,7 @@ skip_covered = true
 
 [tool.black]
 line-length = 88
-target-version = ["py37", "py38", "py39", "py310"]
+target-version = ["py310"]
 include = '\.pyi?$'
 exclude = '''
 /(

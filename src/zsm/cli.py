@@ -1,12 +1,12 @@
 import datetime
 import logging
 import sys
+from importlib.metadata import version as distribution_version
 from pathlib import Path
 from typing import Optional
 
 import click
 import pid
-import pkg_resources
 
 from . import config, manage
 from .logging import init_logging
@@ -113,7 +113,7 @@ def validate_config(config_file: str, log_level: str):
 
 @program.command("version")
 def version():
-    version = pkg_resources.get_distribution("zsm").version
+    version = distribution_version("zsm")
     print(f"zsm {version}")
 
 

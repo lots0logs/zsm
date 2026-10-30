@@ -48,7 +48,7 @@ def test(c):
 @task(clean, aliases=["b"])
 def build(c):
     with c.cd(str(REPO_ROOT)):
-        c.run("python setup.py sdist bdist_wheel")
+        c.run("python -m build")
 
 
 @task(aliases=["p"])

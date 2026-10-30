@@ -199,9 +199,10 @@ def test_clock_skips_repeated_run_in_same_slot(get_snapshots, create):
 )
 def test_clock_boundaries_and_downtime(latest, now, frequency, expected):
     snapshots = [zsm.zfs.Snapshot(dataset, "zsm_test_" + latest)]
-    with mock.patch("zsm.manage.get_snapshots", return_value=snapshots), mock.patch(
-        "zsm.manage.create_snapshot"
-    ) as create:
+    with (
+        mock.patch("zsm.manage.get_snapshots", return_value=snapshots),
+        mock.patch("zsm.manage.create_snapshot") as create,
+    ):
         zsm.manage.create_snapshots(
             datetime.datetime.strptime(now, zsm.manage.SNAPSHOT_TIMESTAMP_FORMAT),
             dataset,
@@ -216,9 +217,10 @@ def test_clock_boundaries_and_downtime(latest, now, frequency, expected):
 @pytest.mark.parametrize("dry_run", [True, False])
 def test_clock_first_snapshot_and_dry_run(dry_run):
     now = datetime.datetime(2026, 10, 30, 12, 15, 1)
-    with mock.patch("zsm.manage.get_snapshots", return_value=[]), mock.patch(
-        "zsm.manage.create_snapshot"
-    ) as create:
+    with (
+        mock.patch("zsm.manage.get_snapshots", return_value=[]),
+        mock.patch("zsm.manage.create_snapshot") as create,
+    ):
         zsm.manage.create_snapshots(
             now,
             dataset,
@@ -246,8 +248,9 @@ def test_manage_passes_clock_schedule():
         ]
     }
     now = datetime.datetime(2026, 10, 30, 13)
-    with mock.patch("zsm.manage.create_snapshots") as create, mock.patch(
-        "zsm.manage.destroy_snapshots"
+    with (
+        mock.patch("zsm.manage.create_snapshots") as create,
+        mock.patch("zsm.manage.destroy_snapshots"),
     ):
         zsm.manage.manage_snapshots(config, now, True)
     assert create.call_args[1]["schedule"] == "clock"

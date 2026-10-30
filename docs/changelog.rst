@@ -1,6 +1,17 @@
 Changelog
 =========
 
+1.0 (lots0logs fork)
+-------------------
+
+- Include the empty command output fix from upstream PR #1.
+- Isolate snapshot discovery from child datasets.
+- Add opt-in clock-aligned scheduling and fix exact elapsed-time boundaries.
+- Document scheduling, retention, downtime, and local clock behavior.
+- Support and test Python 3.10 through 3.14 with updated dependencies.
+- Publish tested wheel and source artifacts through GitHub Releases only,
+  using plain version tags without a leading v.
+
 0.4.0
 -----
 
