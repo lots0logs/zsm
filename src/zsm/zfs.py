@@ -40,7 +40,9 @@ def get_snapshots(dataset: Dataset):
 
     snapshots = []
     for line in lines:
-        _, name = line.split("@")
+        if not line.startswith(dataset.name + "@"):
+            continue
+        _, name = line.split("@", 1)
         snapshots.append(Snapshot(dataset=dataset, name=name))
     return snapshots
 

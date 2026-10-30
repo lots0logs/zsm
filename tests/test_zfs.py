@@ -88,3 +88,20 @@ def test_destroy_snapshot(mocked_subprocess_run):
         snapshot=zsm.zfs.Snapshot(dataset=zsm.zfs.Dataset(name="tank/a"), name="asdf")
     )
     mocked_subprocess_run.assert_called()
+
+
+@mock.patch("subprocess.run", return_value=get_mocked_subprocess_run_pipeline())
+def test_empty_output_returns_empty_list(mocked_subprocess_run):
+    assert zsm.zfs.run("zfs list") == []
+    assert zsm.zfs.get_snapshots(zsm.zfs.Dataset("tank/a")) == []
+
+
+@mock.patch(
+    "subprocess.run",
+    return_value=get_mocked_subprocess_run_pipeline(
+        stdout=["tank/a/child@daily", "tank/ab@daily", "tank/a@hourly"],
+    ),
+)
+def test_get_snapshots_excludes_other_datasets(mocked_subprocess_run):
+    dataset = zsm.zfs.Dataset("tank/a")
+    assert zsm.zfs.get_snapshots(dataset) == [zsm.zfs.Snapshot(dataset, "hourly")]
